@@ -1,0 +1,30 @@
+---
+underlay_interface: GigabitEthernet0/0
+ikev2_psk: "ParcialDMVPN2026!"
+
+#Hub 1 (R1)
+r1_nhrp_auth: "DMVPN1"
+r1_net_id: 101
+r1_key: 101
+r1_ipv4_prefix: "10.101.0"
+r1_hub_tunnel_v4: "10.101.0.1"
+r1_hub_nbma: "172.16.0.1"
+r1_ospf_cost: 100
+
+#Hub 2 (R2)
+r2_nhrp_auth: "DMVPN2"
+r2_net_id: 102
+r2_key: 102
+r2_ipv4_prefix: "10.102.0"
+r2_hub_tunnel_v4: "10.102.0.2"
+r2_hub_nbma: "172.16.0.2"
+r2_ospf_cost: 200
+
+#Monitoreo SNMPv3
+snmpv3_user: "zabbixv3"
+snmpv3_auth_pass: "AuthZabbix26"
+snmpv3_priv_pass: "PrivZabbix26"
+zabbix_host_group: "Routers"
+zabbix_template: "Cisco IOS by SNMP"
+
+

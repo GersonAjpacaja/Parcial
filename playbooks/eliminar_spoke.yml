@@ -1,0 +1,30 @@
+---
+- name: Eliminar configuracion DMVPN, IPsec y OSPF de una sucursal 
+  hosts: "{{ target_spoke }}"
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  tasks:
+    - name: Remover tuneles, enrutamiento y perfiles criptograficos
+      cisco.ios.ios_config:
+        lines:
+          - no interface Tunnel1
+          - no interface Tunnel2
+          - no router ospf 1
+          - no snmp-server user {{ snmpv3_user }} GRP-PARCIAL v3
+          - no snmp-server group GRP-PARCIAL v3 priv
+          - no snmp-server view V3-RO-PARCIAL iso
+          - no crypto ipsec profile PROF-IPSEC
+          - no crypto ipsec transform-set TSET-DMVPN
+          - no crypto ikev2 profile PROF-IKEV2
+          - no crypto ikev2 keyring KEY-DMVPN
+          - no crypto ikev2 policy POL-IKEV2
+          - no crypto ikev2 proposal PROP-IKEV2
+        save_when: modified
+
+    
+    - name: Eliminar host del servidor Zabbix
+      community.zabbix.zabbix_host:
+        host_name: "{{ inventory_hostname }}"
+        state: absent
+      delegate_to: zabbix_server

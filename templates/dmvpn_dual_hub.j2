@@ -1,0 +1,108 @@
+crypto ikev2 proposal PROP-IKEV2
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy POL-IKEV2
+ match fvrf any
+ proposal PROP-IKEV2
+!
+crypto ikev2 keyring KEY-DMVPN
+ peer ALL
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key {{ ikev2_psk }}
+!
+crypto ikev2 profile PROF-IKEV2
+ match identity remote address 0.0.0.0
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KEY-DMVPN
+!
+crypto ipsec transform-set TSET-DMVPN esp-aes 256 esp-sha256-hmac
+ mode transport
+!
+crypto ipsec profile PROF-IPSEC
+ set transform-set TSET-DMVPN
+ set ikev2-profile PROF-IKEV2
+!
+{% if inventory_hostname == 'R1' or 'spokes' in group_names %}
+interface Tunnel1
+ description DMVPN-PRIMARIO
+ bandwidth 100000
+ ip address {{ r1_ipv4_prefix }}.{{ node_id }} 255.255.255.0
+ no ip redirects
+ ip mtu 1400
+ ip nhrp authentication {{ r1_nhrp_auth }}
+ ip nhrp network-id {{ r1_net_id }}
+{% if inventory_hostname == 'R1' %}
+ ip nhrp map multicast dynamic
+ ip nhrp redirect
+{% else %}
+ ip nhrp map {{ r1_hub_tunnel_v4 }} {{ r1_hub_nbma }}
+ ip nhrp map multicast {{ r1_hub_nbma }}
+ ip nhrp nhs {{ r1_hub_tunnel_v4 }}
+ ip nhrp shortcut
+{% endif %}
+ ip tcp adjust-mss 1360
+ ip ospf network point-to-multipoint
+ ip ospf cost {{ r1_ospf_cost }}
+ ip ospf 1 area 0
+ tunnel source {{ underlay_interface }}
+ tunnel mode gre multipoint
+ tunnel key {{ r1_key }}
+{% if 'spokes' in group_names %}
+ tunnel protection ipsec profile PROF-IPSEC shared
+{% else %}
+ tunnel protection ipsec profile PROF-IPSEC
+{% endif %}
+ no shutdown
+!
+{% endif %}
+{% if inventory_hostname == 'R2' or 'spokes' in group_names %}
+interface Tunnel2
+ description DMVPN-SECUNDARIO
+ bandwidth 100000
+ ip address {{ r2_ipv4_prefix }}.{{ node_id }} 255.255.255.0
+ no ip redirects
+ ip mtu 1400
+ ip nhrp authentication {{ r2_nhrp_auth }}
+ ip nhrp network-id {{ r2_net_id }}
+{% if inventory_hostname == 'R2' %}
+ ip nhrp map multicast dynamic
+ ip nhrp redirect
+{% else %}
+ ip nhrp map {{ r2_hub_tunnel_v4 }} {{ r2_hub_nbma }}
+ ip nhrp map multicast {{ r2_hub_nbma }}
+ ip nhrp nhs {{ r2_hub_tunnel_v4 }}
+ ip nhrp shortcut
+{% endif %}
+ ip tcp adjust-mss 1360
+ ip ospf network point-to-multipoint
+ ip ospf cost {{ r2_ospf_cost }}
+ ip ospf 1 area 0
+ tunnel source {{ underlay_interface }}
+ tunnel mode gre multipoint
+ tunnel key {{ r2_key }}
+{% if 'spokes' in group_names %}
+ tunnel protection ipsec profile PROF-IPSEC shared
+{% else %}
+ tunnel protection ipsec profile PROF-IPSEC
+{% endif %}
+ no shutdown
+!
+{% endif %}
+!
+router ospf 1
+ router-id 10.254.0.{{ node_id }}
+ passive-interface default
+{% if inventory_hostname == 'R1' or 'spokes' in group_names %}
+ no passive-interface Tunnel1
+{% endif %}
+{% if inventory_hostname == 'R2' or 'spokes' in group_names %}
+ no passive-interface Tunnel2
+{% endif %}
+ network 10.0.0.0 0.255.255.255 area 0
+!
+snmp-server view V3-RO-PARCIAL iso included
+snmp-server group GRP-PARCIAL v3 priv read V3-RO-PARCIAL
+snmp-server user {{ snmpv3_user }} GRP-PARCIAL v3 auth sha {{ snmpv3_auth_pass }} priv aes 128 {{ snmpv3_priv_pass }}

@@ -1,0 +1,47 @@
+- name: Desplegar DMVPN Dual-Hub + IPsec IKEv2 + OSPFv2 + SNMPv3 Zabbix
+  hosts: hubs:spokes
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  tasks:
+    - name: Aplicar configuracion Cisco IOS desde plantilla Jinja2
+      cisco.ios.ios_config:
+        src: ../templates/dmvpn_dual_hub.j2
+        save_when: modified
+
+    - name: Asegurar grupo de hosts en Zabbix
+      community.zabbix.zabbix_group:
+        state: present
+        host_groups:
+          - "{{ zabbix_host_group }}"
+      delegate_to: zabbix_server
+      run_once: true
+
+    - name: Registrar o actualizar router en Zabbix via SNMPv3
+      community.zabbix.zabbix_host:
+        host_name: "{{ inventory_hostname }}"
+        visible_name: "{{ inventory_hostname }} ({{ 'Hub' if 'hubs' in group_names else 'Spoke' }})"
+        description: "Router DMVPN gestionado automaticamente por Ansible (SNMPv3)"
+        host_groups:
+          - "{{ zabbix_host_group }}"
+        link_templates:
+          - "{{ zabbix_template }}"
+        status: enabled
+        state: present
+        interfaces:
+          - type: snmp
+            main: 1
+            useip: 1
+            ip: "{{ ansible_host }}"
+            dns: ""
+            port: "161"
+            details:
+              version: 3
+              bulk: 1
+              securityname: "{{ snmpv3_user }}"
+              securitylevel: 2
+              authprotocol: 1
+              authpassphrase: "{{ snmpv3_auth_pass }}"
+              privprotocol: 1
+              privpassphrase: "{{ snmpv3_priv_pass }}"
+      delegate_to: zabbix_server
