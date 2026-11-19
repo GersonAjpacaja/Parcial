@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orquestador DMVPN + Zabbix para Monitoreo</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+    .container { max-width: 1050px; margin: 0 auto; }
+    h1 { color: #38bdf8; margin-bottom: 4px; }
+    .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; }
+    h2 { margin-top: 0; font-size: 1.15rem; color: #f8fafc; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+    label { display: block; margin: 12px 0 5px; font-size: 0.9rem; color: #cbd5e1; }
+    input { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #f8fafc; }
+    .btn { display: inline-block; padding: 10px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 16px; }
+    .btn-primary { background: #0284c7; color: white; width: 100%; }
+    .btn-primary:hover { background: #0369a1; }
+    .btn-danger { background: #dc2626; color: white; padding: 6px 12px; margin-top: 0; font-size: 0.85rem; }
+    .btn-danger:hover { background: #b91c1c; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #334155; font-size: 0.92rem; }
+    th { color: #94a3b8; }
+    .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+    .badge-hub { background: #1d4ed8; color: #dbeafe; }
+    .badge-spoke { background: #065f46; color: #d1fae5; }
+    .console { margin-top: 24px; background: #020617; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
+    pre { margin: 0; white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; color: #a7f3d0; max-height: 360px; overflow-y: auto; }
+    .status-ok { color: #4ade80; font-weight: bold; }
+    .status-err { color: #f87171; font-weight: bold; }
+    .loading { display: none; margin-bottom: 16px; padding: 12px; background: #0c4a6e; border-radius: 8px; color: #bae6fd; font-weight: 600; }
+  </style>
+  <script>
+    function showLoading(msg) {
+      const el = document.getElementById("loading-msg");
+      el.innerText = msg;
+      el.style.display = "block";
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Orquestador DMVPN Fase 3 + Zabbix SNMPv3</h1>
+    <div class="subtitle">Gestión web automatizada mediante Ansible</div>
+
+    <div id="loading-msg" class="loading"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Agregar Sucursal (Spoke)</h2>
+        <form action="/add" method="POST" onsubmit="showLoading('Ejecutando Ansible: configurando DMVPN, IPsec, OSPF y registrando en Zabbix...')">
+          <label for="hostname">Nombre del Router (ej. R8)</label>
+          <input type="text" id="hostname" name="hostname" placeholder="R8" required>
+
+          <label for="ip_addr">IP de Gestión</label>
+          <input type="text" id="ip_addr" name="ip_addr" placeholder="172.16.0.8" required>
+
+          <label for="node_id">Node ID (Último octeto Túnel/Loopback)</label>
+          <input type="number" id="node_id" name="node_id" placeholder="8" min="3" max="250" required>
+
+          <button type="submit" class="btn btn-primary">Desplegar Sucursal</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Topología Activa</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Router</th>
+              <th>Rol</th>
+              <th>IP Gestión</th>
+              <th>Node ID</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name, data in hubs.items() %}
+            <tr>
+              <td><strong>{{ name }}</strong></td>
+              <td><span class="badge badge-hub">HUB</span></td>
+              <td>{{ data.ansible_host }}</td>
+              <td>{{ data.node_id }}</td>
+              <td>—</td>
+            </tr>
+            {% endfor %}
+            {% for name, data in spokes.items() %}
+            <tr>
+              <td><strong>{{ name }}</strong></td>
+              <td><span class="badge badge-spoke">SPOKE</span></td>
+              <td>{{ data.ansible_host }}</td>
+              <td>{{ data.node_id }}</td>
+              <td>
+                <form action="/remove/{{ name }}" method="POST" style="margin:0;"
+                      onsubmit="if(!confirm('¿Eliminar {{ name }} de DMVPN y de Zabbix?')) return false; showLoading('Ejecutando Ansible: eliminando {{ name }} de la red y de Zabbix...');">
+                  <button type="submit" class="btn btn-danger">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if log_output %}
+    <div class="console">
+      <h2>
+        Resultado: {{ last_action }} —
+        {% if action_success %}
+          <span class="status-ok">COMPLETADO</span>
+        {% else %}
+          <span class="status-err">CON ERRORES</span>
+        {% endif %}
+      </h2>
+      <pre>{{ log_output }}</pre>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
